@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Crown / Tiara motif atop -->
+    <path
+        android:pathData="M38,34 L43,40 L54,30 L65,40 L70,34 L68,44 L40,44 Z"
+        android:fillColor="#E5C365" />
+    <path
+        android:pathData="M54,26 L56,29 L54,32 L52,29 Z"
+        android:fillColor="#FFEDAD" />
+
+    <!-- Left Die (tilted slightly) -->
+    <path
+        android:pathData="M29,48 C29,45.8 30.8,44 33,44 L49,44 C51.2,44 53,45.8 53,48 L53,64 C53,66.2 51.2,68 49,68 L33,68 C30.8,68 29,66.2 29,64 Z"
+        android:fillColor="#7A1F3D"
+        android:strokeColor="#E5C365"
+        android:strokeWidth="1.8" />
+
+    <!-- Left Die Pips (Gold / Champagne dots) -->
+    <path
+        android:pathData="M35,50 A2,2 0 1,1 35,50.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M47,50 A2,2 0 1,1 47,50.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M41,56 A2,2 0 1,1 41,56.01"
+        android:fillColor="#E5C365" />
+    <path
+        android:pathData="M35,62 A2,2 0 1,1 35,62.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M47,62 A2,2 0 1,1 47,62.01"
+        android:fillColor="#F6F0E8" />
+
+    <!-- Right Die (overlapping, ruby red) -->
+    <path
+        android:pathData="M55,54 C55,51.8 56.8,50 59,50 L75,50 C77.2,50 79,51.8 79,54 L79,70 C79,72.2 77.2,74 75,74 L59,74 C56.8,74 55,72.2 55,70 Z"
+        android:fillColor="#B3263E"
+        android:strokeColor="#E5C365"
+        android:strokeWidth="1.8" />
+
+    <!-- Right Die Pips -->
+    <path
+        android:pathData="M61,56 A2,2 0 1,1 61,56.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M73,56 A2,2 0 1,1 73,56.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M67,62 A2.5,2.5 0 1,1 67,62.01"
+        android:fillColor="#E5C365" />
+    <path
+        android:pathData="M61,68 A2,2 0 1,1 61,68.01"
+        android:fillColor="#F6F0E8" />
+    <path
+        android:pathData="M73,68 A2,2 0 1,1 73,68.01"
+        android:fillColor="#F6F0E8" />
+
+    <!-- Sensual playful sparkle / flame motif at bottom center -->
+    <path
+        android:pathData="M54,73 Q55,77 58,79 Q55,81 54,85 Q53,81 50,79 Q53,77 54,73 Z"
+        android:fillColor="#E5C365" />
+</vector>

@@ -1,0 +1,6 @@
+{
+  "name": "Dare or Double Dare",
+  "description": "A seductive and playful adult dare board game with levels of intensity, custom dare storage, user profiles, and consent-first safety controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

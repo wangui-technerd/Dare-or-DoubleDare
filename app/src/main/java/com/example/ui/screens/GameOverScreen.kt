@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.dao.TopMomentDetail
 import com.example.domain.Player
 import com.example.ui.components.SeductiveGoldButton
 import com.example.ui.components.SeductivePrimaryButton
@@ -50,6 +51,7 @@ import com.example.ui.theme.SoftCharcoal
 @Composable
 fun GameOverScreen(
     players: List<Player>,
+    topMoments: List<TopMomentDetail> = emptyList(),
     onPlayAgain: () -> Unit,
     onNewGame: () -> Unit,
     onViewPastGames: () -> Unit
@@ -111,7 +113,88 @@ fun GameOverScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // Top Moments (Hearts Feature)
+            if (topMoments.isNotEmpty()) {
+                Text(
+                    text = "🖤 TOP MOMENTS OF THE GAME",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        letterSpacing = 1.8.sp,
+                        color = AppTheme.colors.goldLight,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    topMoments.forEachIndexed { index, moment ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(AppTheme.colors.surfaceElevated)
+                                .border(1.dp, AppTheme.colors.gold, RoundedCornerShape(16.dp))
+                                .padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "#${index + 1} • ${moment.playerName}",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = AppTheme.colors.gold
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = moment.cardText,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            color = AppTheme.colors.textPrimary
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(DeepBurgundy)
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "🖤 ${moment.heartCount}",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = CreamWhite
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
             // Leaderboard / Podium
+            Text(
+                text = "🏆 FINAL LEADERBOARD",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    letterSpacing = 1.8.sp,
+                    color = AppTheme.colors.gold,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)

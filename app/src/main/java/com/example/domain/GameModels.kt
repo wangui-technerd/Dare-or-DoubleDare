@@ -1,5 +1,7 @@
 package com.example.domain
 
+import com.example.data.model.DareCardEntity
+
 data class Player(
     val id: String,
     val name: String,
@@ -25,6 +27,15 @@ data class CategoryMeta(
 object GameConstants {
     const val BOARD_LENGTH = 40
     const val BONUS_POINTS = 2
+
+    val EMERGENCY_CARD = DareCardEntity(
+        id = -1L,
+        category = "WILDCARD",
+        level = 1,
+        text = "Share one thing you're grateful for right now.",
+        scope = "solo",
+        isCustom = false
+    )
 
     val LEVEL_POINTS = mapOf(
         1 to 1,

@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -109,6 +111,7 @@ fun GamePlayScreen(
     onSwapPositions: (String) -> Unit,
     onAdvanceTurn: () -> Unit,
     onEndGame: () -> Unit,
+    onGiveHeart: () -> Unit = {},
     onClearEmergencySafeWord: () -> Unit,
     onOpenSafetyModal: () -> Unit,
     onOpenScoreHistory: () -> Unit,
@@ -244,7 +247,8 @@ fun GamePlayScreen(
                         TurnSummaryContent(
                             state = state,
                             onContinue = onAdvanceTurn,
-                            onEndGame = onEndGame
+                            onEndGame = onEndGame,
+                            onGiveHeart = onGiveHeart
                         )
                     }
 
@@ -1283,7 +1287,8 @@ private fun CardRevealContent(
 private fun TurnSummaryContent(
     state: GameUiState,
     onContinue: () -> Unit,
-    onEndGame: () -> Unit
+    onEndGame: () -> Unit,
+    onGiveHeart: () -> Unit = {}
 ) {
     val active = state.activePlayer ?: return
     val nextIndex = (state.currentPlayerIndex + 1) % state.players.size
@@ -1328,7 +1333,37 @@ private fun TurnSummaryContent(
             )
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Heart reaction button for non-active players (Task 5)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(30.dp))
+                .background(ObsidianCardElevated)
+                .border(1.dp, ChampagneGold.copy(alpha = 0.6f), RoundedCornerShape(30.dp))
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { onGiveHeart() }
+                    )
+                }
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("🖤", fontSize = 22.sp)
+                Text(
+                    text = "Long press to heart this moment",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        color = SoftCharcoal
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (hasReachedEnd) {
             Box(

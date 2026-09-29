@@ -6,13 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
 import com.example.data.DareRepository
+import com.example.data.dao.TopMomentDetail
 import com.example.data.model.DareCardEntity
 import com.example.data.model.DareLogEntity
 import com.example.data.model.GameSessionEntity
 import com.example.data.model.UserEntity
 import com.example.domain.CategoryAffinity
 import com.example.domain.GameConstants
-import com.example.domain.LEVEL_INFO
 import com.example.domain.LearnedPatterns
 import com.example.domain.Player
 import com.example.domain.RollOutcome
@@ -23,16 +23,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 enum class GameScreen {
     WELCOME,
-    AUTH,
-    PROFILE,
-    PLAYERS_SETUP,
     SAFETY_SETUP,
+    PLAYER_SETUP,
     BOARD_OVERVIEW,
     ROLL_SCREEN,
     ROLL_RESULT,
@@ -45,8 +44,9 @@ enum class GameScreen {
     DOUBLE_DARE_REVEAL,
     TURN_SUMMARY,
     GAME_OVER,
-    PAST_GAMES,
     CUSTOM_DARES,
+    PAST_SESSIONS,
+    LEARNED_PATTERNS,
     RULES
 }
 
@@ -62,6 +62,7 @@ data class GameUiState(
     val partnerConsentStatus: Map<String, Boolean> = emptyMap(), // true = in, false = out
     val safetyLevel: SafetyLevel = SafetyLevel.GREEN,
     val safeWord: String = "Pineapple",
+    val playerSafetyClamps: Map<String, Int> = emptyMap(), // playerId -> clamp level
     val sharePointsWithPartners: Boolean = false,
     val highestZoneUnlocked: Int = 1,
     val pendingZoneUnlock: Int? = null,
@@ -73,6 +74,8 @@ data class GameUiState(
     val isTimerFinished: Boolean = false,
     val uncomfortableCardPending: DareCardEntity? = null,
     val learnedUncomfortableCount: Int = 0,
+    val activeDareLogId: Long? = null,
+    val topMomentsList: List<TopMomentDetail> = emptyList(),
     val emergencySafeWordTriggered: Boolean = false,
     val floatBadgeText: String? = null,
     val showSafetyModal: Boolean = false,
@@ -89,7 +92,7 @@ data class GameUiState(
 
 class GameViewModel(
     private val repository: DareRepository,
-    private val context: Context
+    private val applicationContext: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GameUiState())
@@ -109,7 +112,7 @@ class GameViewModel(
 
     private var timerJob: Job? = null
 
-    private val prefs = context.getSharedPreferences("uncomfortable_cards_prefs", Context.MODE_PRIVATE)
+    private val prefs = applicationContext.getSharedPreferences("uncomfortable_cards_prefs", Context.MODE_PRIVATE)
 
     private val _isDarkMode = MutableStateFlow(
         prefs.getBoolean("is_dark_mode", true)
@@ -125,14 +128,15 @@ class GameViewModel(
     private val _learnedPatterns = MutableStateFlow(LearnedPatterns())
     val learnedPatterns: StateFlow<LearnedPatterns> = _learnedPatterns.asStateFlow()
 
+    private val safetyClamp = mutableMapOf<String, Int>()
+
     init {
         // Pre-populate default database cards on first launch
         viewModelScope.launch {
-            AppDatabase.getInstance(context).prepopulateCards()
+            AppDatabase.getInstance(applicationContext).prepopulateCards()
+            val allMuted = repository.getAllMutedCardIds().size
+            _uiState.value = _uiState.value.copy(learnedUncomfortableCount = allMuted)
         }
-        _uiState.value = _uiState.value.copy(
-            learnedUncomfortableCount = getLearnedUncomfortableIds().size
-        )
         viewModelScope.launch {
             repository.allLogs.collect { logs ->
                 calculateLearnedPatterns(logs)
@@ -140,7 +144,30 @@ class GameViewModel(
         }
     }
 
-    private fun calculateLearnedPatterns(logs: List<DareLogEntity>) {
+    // Safety Clamp per-player (Task 4)
+    fun setYellowClamp(playerId: String, clampLevel: Int = 2) {
+        safetyClamp[playerId] = clampLevel
+        _uiState.value = _uiState.value.copy(
+            safetyLevel = SafetyLevel.YELLOW,
+            playerSafetyClamps = safetyClamp.toMap()
+        )
+    }
+
+    fun clearYellowClamp(playerId: String) {
+        safetyClamp.remove(playerId)
+        val newLevel = if (safetyClamp.isEmpty()) SafetyLevel.GREEN else SafetyLevel.YELLOW
+        _uiState.value = _uiState.value.copy(
+            safetyLevel = newLevel,
+            playerSafetyClamps = safetyClamp.toMap()
+        )
+    }
+
+    fun effectiveMaxLevel(participantIds: List<String>, zoneCap: Int): Int {
+        val clamps = participantIds.mapNotNull { safetyClamp[it] }
+        return (clamps + zoneCap).minOrNull() ?: zoneCap
+    }
+
+    private suspend fun calculateLearnedPatterns(logs: List<DareLogEntity>) {
         val total = logs.size
         val completed = logs.count { it.outcome == "COMPLETED" || it.outcome == "BONUS" }
         val uncomfortable = logs.count { it.outcome == "UNCOMFORTABLE" }
@@ -204,36 +231,28 @@ class GameViewModel(
             else -> "Intimate All-Rounder" to "Adventurous, versatile, and eager to explore all facets of the game"
         }
 
-        val uncomfortableIds = getLearnedUncomfortableIds()
+        val uncomfortableIds = repository.getAllMutedCardIds().toSet()
+        val blockedCards = repository.getCardsByIds(uncomfortableIds.toList())
+        val adaptiveOn = prefs.getBoolean("adaptive_engine_enabled", true)
+        val boostCustomOn = prefs.getBoolean("boost_custom_dares", true)
 
-        viewModelScope.launch {
-            val blockedCards = repository.getCardsByIds(uncomfortableIds.toList())
-            val adaptiveOn = prefs.getBoolean("adaptive_engine_enabled", true)
-            val boostCustomOn = prefs.getBoolean("boost_custom_dares", true)
-
-            _learnedPatterns.value = LearnedPatterns(
-                totalDaresPlayed = total,
-                totalCompleted = completed,
-                totalUncomfortable = uncomfortable,
-                totalSkipped = skipped,
-                overallCompletionRate = overallRate,
-                categoryAffinities = categoryAffinities,
-                topCategories = topCategories,
-                intensityComfortPercents = levelMap,
-                intensitySweetSpot = sweetSpot,
-                playstyleArchetype = archetype,
-                archetypeDescription = desc,
-                blockedCardIds = uncomfortableIds,
-                blockedCards = blockedCards,
-                adaptiveEngineEnabled = adaptiveOn,
-                boostCustomDares = boostCustomOn
-            )
-        }
-    }
-
-    fun getLearnedUncomfortableIds(): Set<Long> {
-        val raw = prefs.getStringSet("blocked_card_ids", emptySet()) ?: emptySet()
-        return raw.mapNotNull { it.toLongOrNull() }.toSet()
+        _learnedPatterns.value = LearnedPatterns(
+            totalDaresPlayed = total,
+            totalCompleted = completed,
+            totalUncomfortable = uncomfortable,
+            totalSkipped = skipped,
+            overallCompletionRate = overallRate,
+            categoryAffinities = categoryAffinities,
+            topCategories = topCategories,
+            intensityComfortPercents = levelMap,
+            intensitySweetSpot = sweetSpot,
+            playstyleArchetype = archetype,
+            archetypeDescription = desc,
+            blockedCardIds = uncomfortableIds,
+            blockedCards = blockedCards,
+            adaptiveEngineEnabled = adaptiveOn,
+            boostCustomDares = boostCustomOn
+        )
     }
 
     fun navigateTo(screen: GameScreen) {
@@ -276,6 +295,7 @@ class GameViewModel(
     }
 
     fun setupGame(players: List<Player>, safeWord: String) {
+        safetyClamp.clear()
         _uiState.value = GameUiState(
             currentScreen = GameScreen.BOARD_OVERVIEW,
             players = players.map { it.copy(position = 0, points = 0) },
@@ -283,7 +303,8 @@ class GameViewModel(
             safeWord = safeWord.ifBlank { "Pineapple" },
             highestZoneUnlocked = 1,
             isGameInProgress = true,
-            usedCardIds = emptySet()
+            usedCardIds = emptySet(),
+            playerSafetyClamps = emptyMap()
         )
     }
 
@@ -418,13 +439,32 @@ class GameViewModel(
         excludeId: Long? = null,
         scopePreference: String? = null
     ): DareCardEntity? {
-        val used = _uiState.value.usedCardIds
-        val uncomfortable = getLearnedUncomfortableIds()
-        val excluded = used + uncomfortable + (if (excludeId != null) setOf(excludeId) else emptySet())
+        val state = _uiState.value
+        val used = state.usedCardIds
+        val active = state.activePlayer
+        val activeUserId = active?.userId ?: active?.id?.hashCode()?.toLong() ?: 0L
+
+        val participantUserIds = mutableSetOf(activeUserId)
+        state.selectedPartnerIds.forEach { pid ->
+            val p = state.players.find { it.id == pid }
+            val pUid = p?.userId ?: p?.id?.hashCode()?.toLong()
+            if (pUid != null) participantUserIds.add(pUid)
+        }
+
+        val mutedCardIds = mutableSetOf<Long>()
+        participantUserIds.forEach { uid ->
+            mutedCardIds.addAll(repository.getMutedCardIds(uid))
+        }
+
+        val excluded = used + mutedCardIds + (if (excludeId != null) setOf(excludeId) else emptySet())
+
+        // Calculate effective level based on per-player yellow safety clamps and zone cap! (Task 4)
+        val participantPlayerIds = if (active != null) listOf(active.id) + state.selectedPartnerIds else emptyList()
+        val effectiveLevel = effectiveMaxLevel(participantPlayerIds, level)
 
         val boostCustom = prefs.getBoolean("boost_custom_dares", true)
 
-        var cards = repository.getCardsByCategoryAndLevel(category, level)
+        var cards = repository.getCardsByCategoryAndLevel(category, effectiveLevel)
             .filter { !excluded.contains(it.id) }
 
         if (boostCustom) {
@@ -443,7 +483,7 @@ class GameViewModel(
 
         if (cards.isEmpty()) {
             // Fallback to nearby levels downward
-            for (l in level downTo 1) {
+            for (l in effectiveLevel downTo 1) {
                 cards = repository.getCardsByCategoryAndLevel(category, l)
                     .filter { !excluded.contains(it.id) }
                 if (scopePreference != null) {
@@ -456,7 +496,7 @@ class GameViewModel(
 
         if (cards.isEmpty()) {
             // Fallback to nearby levels upward within the category
-            for (l in (level + 1)..4) {
+            for (l in (effectiveLevel + 1)..4) {
                 cards = repository.getCardsByCategoryAndLevel(category, l)
                     .filter { !excluded.contains(it.id) }
                 if (scopePreference != null) {
@@ -498,8 +538,11 @@ class GameViewModel(
         return card
     }
 
-    private fun prepareCardSetup(card: DareCardEntity?) {
-        if (card == null) return
+    private fun prepareCardSetup(cardIn: DareCardEntity?) {
+        val card = cardIn ?: GameConstants.EMERGENCY_CARD
+        if (cardIn == null) {
+            android.util.Log.w("GameViewModel", "Emergency fallback card used — deck may be exhausted for this player")
+        }
         val state = _uiState.value
         val active = state.activePlayer ?: return
         val others = state.players.filter { it.id != active.id }
@@ -519,37 +562,34 @@ class GameViewModel(
             currentCard = card,
             cardScope = scope,
             selectedPartnerIds = partnerIds,
-            partnerConsentStatus = partnerIds.associateWith { true },
-            uncomfortableCardPending = null,
+            partnerConsentStatus = partnerIds.associateWith { true }, // Default opt-in
             timerRemaining = card.timerSeconds ?: 0,
             isTimerRunning = false,
             isTimerFinished = false,
+            uncomfortableCardPending = null,
             currentScreen = GameScreen.CARD_REVEAL
         )
     }
 
     fun selectPartner(partnerId: String) {
-        _uiState.value = _uiState.value.copy(
-            selectedPartnerIds = listOf(partnerId),
-            partnerConsentStatus = mapOf(partnerId to true),
-            currentScreen = GameScreen.CARD_REVEAL
+        val state = _uiState.value
+        val current = state.selectedPartnerIds
+        val updated = if (current.contains(partnerId)) {
+            if (current.size > 1) current - partnerId else current // Keep at least one partner for paired
+        } else {
+            current + partnerId
+        }
+        _uiState.value = state.copy(
+            selectedPartnerIds = updated,
+            partnerConsentStatus = updated.associateWith { true }
         )
     }
 
-    fun togglePartnerConsent(partnerId: String, isIn: Boolean) {
-        val current = _uiState.value.partnerConsentStatus.toMutableMap()
-        current[partnerId] = isIn
-        _uiState.value = _uiState.value.copy(partnerConsentStatus = current)
-    }
-
-    fun downgradeToSolo() {
-        _uiState.value = _uiState.value.copy(
-            cardScope = "solo",
-            selectedPartnerIds = emptyList(),
-            partnerConsentStatus = emptyMap(),
-            uncomfortableCardPending = null,
-            currentScreen = GameScreen.CARD_REVEAL
-        )
+    fun togglePartnerConsent(playerId: String, consent: Boolean) {
+        val state = _uiState.value
+        val updated = state.partnerConsentStatus.toMutableMap()
+        updated[playerId] = consent
+        _uiState.value = state.copy(partnerConsentStatus = updated)
     }
 
     fun redrawDifferentCard() {
@@ -561,15 +601,12 @@ class GameViewModel(
         }
     }
 
-    // Learning System: Mark card uncomfortable, mute it permanently for players, and offer replacement/solo
+    // Learning System: Mark card uncomfortable for active player (Task 3)
     fun markCurrentCardUncomfortable() {
         val state = _uiState.value
         val card = state.currentCard ?: return
         val active = state.activePlayer ?: return
-
-        val currentSet = prefs.getStringSet("blocked_card_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
-        currentSet.add(card.id.toString())
-        prefs.edit().putStringSet("blocked_card_ids", currentSet).apply()
+        val userId = active.userId ?: active.id.hashCode().toLong()
 
         val log = DareLogEntity(
             gameSessionId = 0,
@@ -582,19 +619,22 @@ class GameViewModel(
         )
 
         viewModelScope.launch {
-            repository.logDare(log)
-        }
+            repository.muteCard(userId, card.id)
+            val logId = repository.logDare(log)
+            val mutedCount = repository.getMutedCardIds(userId).size
 
-        _uiState.value = state.copy(
-            learnedUncomfortableCount = currentSet.size,
-            uncomfortableCardPending = card,
-            floatBadgeText = "🛡️ Learned: Won't suggest again",
-            recentScoreLogs = listOf(log) + state.recentScoreLogs
-        )
+            _uiState.value = _uiState.value.copy(
+                learnedUncomfortableCount = mutedCount,
+                uncomfortableCardPending = card,
+                activeDareLogId = logId,
+                floatBadgeText = "🛡️ Learned: Won't suggest again to ${active.name}",
+                recentScoreLogs = listOf(log) + state.recentScoreLogs
+            )
+        }
 
         viewModelScope.launch {
             delay(2500)
-            if (_uiState.value.floatBadgeText == "🛡️ Learned: Won't suggest again") {
+            if (_uiState.value.floatBadgeText?.startsWith("🛡️ Learned") == true) {
                 _uiState.value = _uiState.value.copy(floatBadgeText = null)
             }
         }
@@ -613,8 +653,10 @@ class GameViewModel(
 
     fun drawReplacementCard() = drawReplacementDare()
 
+    fun downgradeToSolo() = downgradeToSoloDare()
+
     fun getUncomfortableCardIds(): Set<String> {
-        return prefs.getStringSet("blocked_card_ids", emptySet()) ?: emptySet()
+        return _learnedPatterns.value.blockedCardIds.map { it.toString() }.toSet()
     }
 
     fun downgradeToSoloDare() {
@@ -643,29 +685,27 @@ class GameViewModel(
     }
 
     fun resetLearnedUncomfortableCards() {
-        prefs.edit().remove("blocked_card_ids").apply()
-        _uiState.value = _uiState.value.copy(
-            learnedUncomfortableCount = 0,
-            floatBadgeText = "↺ Disliked dare memory reset"
-        )
-        _learnedPatterns.value = _learnedPatterns.value.copy(
-            blockedCardIds = emptySet(),
-            blockedCards = emptyList()
-        )
         viewModelScope.launch {
+            repository.clearAllMutedCards()
+            _uiState.value = _uiState.value.copy(
+                learnedUncomfortableCount = 0,
+                floatBadgeText = "↺ Disliked dare memory reset"
+            )
+            _learnedPatterns.value = _learnedPatterns.value.copy(
+                blockedCardIds = emptySet(),
+                blockedCards = emptyList()
+            )
             delay(2000)
             _uiState.value = _uiState.value.copy(floatBadgeText = null)
         }
     }
 
     fun unblockCard(cardId: Long) {
-        val current = prefs.getStringSet("blocked_card_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
-        current.remove(cardId.toString())
-        prefs.edit().putStringSet("blocked_card_ids", current).apply()
-        val updatedIds = current.mapNotNull { it.toLongOrNull() }.toSet()
-        _uiState.value = _uiState.value.copy(learnedUncomfortableCount = updatedIds.size)
         viewModelScope.launch {
+            repository.unmuteCardForAll(cardId)
+            val updatedIds = repository.getAllMutedCardIds().toSet()
             val updatedCards = repository.getCardsByIds(updatedIds.toList())
+            _uiState.value = _uiState.value.copy(learnedUncomfortableCount = updatedIds.size)
             _learnedPatterns.value = _learnedPatterns.value.copy(
                 blockedCardIds = updatedIds,
                 blockedCards = updatedCards
@@ -684,8 +724,8 @@ class GameViewModel(
     }
 
     fun clearLearnedPatterns() {
-        prefs.edit().remove("blocked_card_ids").apply()
         viewModelScope.launch {
+            repository.clearAllMutedCards()
             repository.clearAllLogs()
             _uiState.value = _uiState.value.copy(learnedUncomfortableCount = 0)
             _learnedPatterns.value = LearnedPatterns()
@@ -698,24 +738,21 @@ class GameViewModel(
         val active = state.activePlayer
         val log = DareLogEntity(
             gameSessionId = 0,
-            playerName = active?.name ?: "Player",
-            cardText = "SAFE WORD TRIGGERED (${state.safeWord})",
+            playerName = active?.name ?: "Game",
+            cardText = "EMERGENCY SAFE WORD TRIGGERED (${state.safeWord})",
             category = "SAFETY",
-            level = 0,
-            outcome = "SAFEWORD",
+            level = 1,
+            outcome = "EMERGENCY_STOP",
             points = 0
         )
         viewModelScope.launch {
             repository.logDare(log)
         }
         _uiState.value = state.copy(
+            isTimerRunning = false,
             safetyLevel = SafetyLevel.RED,
             emergencySafeWordTriggered = true,
-            isTimerRunning = false,
-            timerRemaining = 0,
-            currentCard = null,
-            bonusCard = null,
-            recentScoreLogs = listOf(log) + state.recentScoreLogs
+            floatBadgeText = "🛑 Emergency Stop Triggered"
         )
     }
 
@@ -760,26 +797,64 @@ class GameViewModel(
         val log = DareLogEntity(
             gameSessionId = 0,
             playerName = active.name,
-            cardText = state.currentCard?.text ?: "Bonus action",
-            category = state.currentCard?.category ?: "SPECIAL",
-            level = state.currentCard?.level ?: 1,
+            cardText = "Double Dare Bonus Awarded",
+            category = "BONUS",
+            level = 2,
             outcome = "BONUS",
             points = GameConstants.BONUS_POINTS
         )
 
+        viewModelScope.launch {
+            val logId = repository.logDare(log)
+            _uiState.value = _uiState.value.copy(activeDareLogId = logId)
+        }
+
         _uiState.value = state.copy(
             players = updatedPlayers,
-            floatBadgeText = "+${GameConstants.BONUS_POINTS} BONUS ✨",
+            floatBadgeText = "+${GameConstants.BONUS_POINTS} Bonus Points!",
             recentScoreLogs = listOf(log) + state.recentScoreLogs
         )
 
         viewModelScope.launch {
-            repository.logDare(log)
-            if (active.userId != null && active.userId > 0) {
-                repository.updateUserStats(active.userId, 0, 0, GameConstants.BONUS_POINTS)
-            }
             delay(1600)
-            _uiState.value = _uiState.value.copy(floatBadgeText = null)
+            if (_uiState.value.floatBadgeText?.contains("Bonus") == true) {
+                _uiState.value = _uiState.value.copy(floatBadgeText = null)
+            }
+        }
+    }
+
+    // Hearts Reaction (Task 5)
+    fun giveHeart(dareLogId: Long? = null, sessionId: Long = 0L) {
+        val logId = dareLogId ?: _uiState.value.activeDareLogId ?: return
+        viewModelScope.launch {
+            repository.giveHeart(logId, sessionId)
+            _uiState.value = _uiState.value.copy(
+                floatBadgeText = "🖤 Loved this moment!"
+            )
+            delay(2000)
+            if (_uiState.value.floatBadgeText == "🖤 Loved this moment!") {
+                _uiState.value = _uiState.value.copy(floatBadgeText = null)
+            }
+        }
+    }
+
+    fun loadTopMoments(sessionId: Long = 0L) {
+        viewModelScope.launch {
+            val counts = repository.getTopMoments(sessionId)
+            val allLogsList = repository.allLogs.firstOrNull() ?: emptyList()
+            val details = counts.mapNotNull { count ->
+                val log = allLogsList.find { it.id == count.dareLogId }
+                if (log != null) {
+                    TopMomentDetail(
+                        dareLogId = log.id,
+                        playerName = log.playerName,
+                        cardText = log.cardText,
+                        category = log.category,
+                        heartCount = count.heartCount
+                    )
+                } else null
+            }
+            _uiState.value = _uiState.value.copy(topMomentsList = details)
         }
     }
 
@@ -820,7 +895,8 @@ class GameViewModel(
         )
 
         viewModelScope.launch {
-            repository.logDare(log)
+            val logId = repository.logDare(log)
+            _uiState.value = _uiState.value.copy(activeDareLogId = logId)
             if (outcome == "completed" && active.userId != null && active.userId > 0) {
                 repository.updateUserStats(active.userId, 0, 1, pts)
             }
@@ -879,13 +955,14 @@ class GameViewModel(
             playerName = active.name,
             cardText = "Swapped board positions with ${target.name} (Space ${target.position})",
             category = "SPECIAL",
-            level = 0,
+            level = 2,
             outcome = "SWAP",
             points = 0
         )
 
         viewModelScope.launch {
-            repository.logDare(log)
+            val logId = repository.logDare(log)
+            _uiState.value = _uiState.value.copy(activeDareLogId = logId)
         }
 
         _uiState.value = state.copy(
@@ -898,73 +975,38 @@ class GameViewModel(
 
     fun advanceToNextTurn() {
         val state = _uiState.value
-        val active = state.activePlayer ?: return
-
-        if (active.position >= GameConstants.BOARD_LENGTH) {
-            endGame()
-            return
-        }
-
         val nextIndex = (state.currentPlayerIndex + 1) % state.players.size
         _uiState.value = state.copy(
             currentPlayerIndex = nextIndex,
+            rollOutcome = null,
             currentCard = null,
             bonusCard = null,
-            rollOutcome = null,
-            selectedPartnerIds = emptyList(),
-            partnerConsentStatus = emptyMap(),
             specialSpace = null,
-            timerRemaining = 0,
-            isTimerRunning = false,
+            uncomfortableCardPending = null,
+            activeDareLogId = null,
             currentScreen = GameScreen.ROLL_SCREEN
         )
     }
 
     fun endGame() {
-        val state = _uiState.value
-        val sorted = state.players.sortedByDescending { it.points }
-        val winner = sorted.firstOrNull()
-
-        val playersSummary = state.players.joinToString(", ") { "${it.name}: ${it.points}pts" }
-
-        val session = GameSessionEntity(
-            winnerName = winner?.name ?: "No one",
-            winnerPoints = winner?.points ?: 0,
-            playersJson = playersSummary,
-            roundsCount = state.recentScoreLogs.size,
-            daresCompletedCount = state.recentScoreLogs.count { it.outcome == "COMPLETED" || it.outcome == "BONUS" },
-            safeWordUsed = state.safetyLevel == SafetyLevel.RED
-        )
-
-        viewModelScope.launch {
-            repository.saveGameSession(session)
-            // Update stats for all registered users in the game
-            state.players.forEach { p ->
-                if (p.userId != null && p.userId > 0) {
-                    repository.updateUserStats(p.userId, 1, 0, 0)
-                }
-            }
-        }
-
-        _uiState.value = state.copy(
-            isGameInProgress = false,
-            currentScreen = GameScreen.GAME_OVER
+        loadTopMoments(0L)
+        _uiState.value = _uiState.value.copy(
+            currentScreen = GameScreen.GAME_OVER,
+            isGameInProgress = false
         )
     }
 
-    // Custom Dares & Favorites
     fun addCustomDare(category: String, level: Int, text: String, scope: String, timer: Int?) {
+        val newCard = DareCardEntity(
+            category = category,
+            level = level,
+            text = text,
+            scope = scope,
+            timerSeconds = if (timer != null && timer > 0) timer else null,
+            isCustom = true
+        )
         viewModelScope.launch {
-            repository.addCustomCard(
-                DareCardEntity(
-                    category = category.uppercase(),
-                    level = level.coerceIn(1, 4),
-                    text = text.trim(),
-                    scope = scope.lowercase(),
-                    timerSeconds = if (timer != null && timer > 0) timer else null,
-                    isCustom = true
-                )
-            )
+            repository.addCustomCard(newCard)
         }
     }
 
@@ -989,14 +1031,9 @@ class GameViewModel(
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val db = AppDatabase.getInstance(context)
-            val repo = DareRepository(
-                db.userDao(),
-                db.gameSessionDao(),
-                db.dareCardDao(),
-                db.dareLogDao()
-            )
-            return GameViewModel(repo, context) as T
+            val db = AppDatabase.getInstance(context.applicationContext)
+            val repo = DareRepository(db)
+            return GameViewModel(repo, context.applicationContext) as T
         }
     }
 }

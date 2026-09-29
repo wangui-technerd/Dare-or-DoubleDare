@@ -136,12 +136,9 @@ fun DareAppRoot(
                     allUsers = authUsers,
                     errorMessage = authState.errorMessage,
                     successMessage = authState.successMessage,
-                    onLogin = { username, pin ->
-                        authViewModel.login(username, pin)
-                    },
-                    onRegister = { username, pin, displayName, avatarEmoji, avatarColorHex, safeWord, intensity ->
+                    onRegister = { username, displayName, avatarEmoji, avatarColorHex, safeWord, intensity ->
                         authViewModel.register(
-                            username, pin, displayName, avatarEmoji, avatarColorHex, safeWord, intensity
+                            username, displayName, avatarEmoji, avatarColorHex, safeWord, intensity
                         )
                     },
                     onSelectUser = { user ->
@@ -211,6 +208,7 @@ fun DareAppRoot(
                     },
                     onAdvanceTurn = { gameViewModel.advanceToNextTurn() },
                     onEndGame = { gameViewModel.endGame() },
+                    onGiveHeart = { gameViewModel.giveHeart() },
                     onClearEmergencySafeWord = { gameViewModel.clearEmergencySafeWord() },
                     onOpenSafetyModal = { showSafetyModal = true },
                     onOpenScoreHistory = { showScoreHistoryModal = true },
@@ -222,6 +220,7 @@ fun DareAppRoot(
             AppDestination.GAME_OVER -> {
                 GameOverScreen(
                     players = gameState.players,
+                    topMoments = gameState.topMomentsList,
                     onPlayAgain = {
                         gameViewModel.setupGame(
                             gameState.players.map { it.copy(position = 0, points = 0) },

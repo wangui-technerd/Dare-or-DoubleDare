@@ -12,7 +12,6 @@ data class UserEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val username: String,
-    val pinHash: String,
     val displayName: String,
     val avatarEmoji: String = "💋",
     val avatarColorHex: String = "#C92A45",

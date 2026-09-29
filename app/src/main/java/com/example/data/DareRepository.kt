@@ -3,10 +3,15 @@ package com.example.data
 import com.example.data.dao.DareCardDao
 import com.example.data.dao.DareLogDao
 import com.example.data.dao.GameSessionDao
+import com.example.data.dao.HeartReactionDao
+import com.example.data.dao.MomentHeartCount
+import com.example.data.dao.MutedCardDao
 import com.example.data.dao.UserDao
 import com.example.data.model.DareCardEntity
 import com.example.data.model.DareLogEntity
 import com.example.data.model.GameSessionEntity
+import com.example.data.model.HeartReactionEntity
+import com.example.data.model.MutedCardEntity
 import com.example.data.model.UserEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,13 +21,17 @@ class DareRepository(
     private val userDao: UserDao,
     private val gameSessionDao: GameSessionDao,
     private val dareCardDao: DareCardDao,
-    private val dareLogDao: DareLogDao
+    private val dareLogDao: DareLogDao,
+    private val mutedCardDao: MutedCardDao,
+    private val heartReactionDao: HeartReactionDao
 ) {
     constructor(database: AppDatabase) : this(
         database.userDao(),
         database.gameSessionDao(),
         database.dareCardDao(),
-        database.dareLogDao()
+        database.dareLogDao(),
+        database.mutedCardDao(),
+        database.heartReactionDao()
     )
 
     // User / Auth operations
@@ -91,6 +100,44 @@ class DareRepository(
 
     suspend fun getCardsByIds(cardIds: List<Long>): List<DareCardEntity> = withContext(Dispatchers.IO) {
         dareCardDao.getCardsByIds(cardIds)
+    }
+
+    // Muted Card operations
+    suspend fun muteCard(userId: Long, cardId: Long) = withContext(Dispatchers.IO) {
+        mutedCardDao.mute(MutedCardEntity(userId = userId, cardId = cardId))
+    }
+
+    suspend fun getMutedCardIds(userId: Long): List<Long> = withContext(Dispatchers.IO) {
+        mutedCardDao.mutedCardIds(userId)
+    }
+
+    suspend fun getAllMutedCardIds(): List<Long> = withContext(Dispatchers.IO) {
+        mutedCardDao.allMutedCardIds()
+    }
+
+    suspend fun unmuteCard(userId: Long, cardId: Long) = withContext(Dispatchers.IO) {
+        mutedCardDao.unmute(userId, cardId)
+    }
+
+    suspend fun unmuteCardForAll(cardId: Long) = withContext(Dispatchers.IO) {
+        mutedCardDao.unmuteCardForAll(cardId)
+    }
+
+    suspend fun clearAllMutedCards() = withContext(Dispatchers.IO) {
+        mutedCardDao.clearAll()
+    }
+
+    // Heart Reaction operations
+    suspend fun giveHeart(dareLogId: Long, sessionId: Long) = withContext(Dispatchers.IO) {
+        heartReactionDao.giveHeart(HeartReactionEntity(dareLogId = dareLogId, gameSessionId = sessionId))
+    }
+
+    suspend fun getTopMoments(sessionId: Long): List<MomentHeartCount> = withContext(Dispatchers.IO) {
+        heartReactionDao.topMoments(sessionId)
+    }
+
+    suspend fun getHeartCountForLog(dareLogId: Long): Int = withContext(Dispatchers.IO) {
+        heartReactionDao.getHeartCountForLog(dareLogId)
     }
 
     // Game Session operations

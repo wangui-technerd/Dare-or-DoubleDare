@@ -15,20 +15,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,27 +45,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
 import com.example.ui.components.SeductiveGoldButton
-import com.example.ui.components.SeductivePrimaryButton
 import com.example.ui.components.SeductiveSecondaryButton
 import com.example.ui.components.parseColor
 import com.example.ui.theme.AppTheme
-import com.example.ui.theme.AntiqueGold
 import com.example.ui.theme.ChampagneGold
 import com.example.ui.theme.CreamWhite
 import com.example.ui.theme.CrimsonRed
 import com.example.ui.theme.LightGold
-import com.example.ui.theme.ObsidianBlack
 import com.example.ui.theme.ObsidianBorder
 import com.example.ui.theme.ObsidianCard
 import com.example.ui.theme.ObsidianCardElevated
-import com.example.ui.theme.PlayerColors
 import com.example.ui.theme.SafetyGreen
 import com.example.ui.theme.SafetyRed
 import com.example.ui.theme.SoftCharcoal
@@ -83,10 +69,8 @@ fun AuthScreen(
     allUsers: List<UserEntity>,
     errorMessage: String?,
     successMessage: String?,
-    onLogin: (username: String, pin: String) -> Unit,
     onRegister: (
         username: String,
-        pin: String,
         displayName: String,
         avatarEmoji: String,
         avatarColorHex: String,
@@ -98,16 +82,11 @@ fun AuthScreen(
     onLogout: () -> Unit,
     onBack: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(if (currentUser != null) 2 else 0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
-
-    // Sign In states
-    var loginUsername by remember { mutableStateOf("") }
-    var loginPin by remember { mutableStateOf("") }
 
     // Register states
     var regUsername by remember { mutableStateOf("") }
-    var regPin by remember { mutableStateOf("") }
     var regDisplayName by remember { mutableStateOf("") }
     var regSafeWord by remember { mutableStateOf("Pineapple") }
     var regAvatarEmoji by remember { mutableStateOf("💋") }
@@ -139,7 +118,7 @@ fun AuthScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = AppTheme.colors.gold)
                 }
                 Text(
-                    text = "USER AUTHENTICATION",
+                    text = "PROFILES & ACCOUNTS",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Bold,
@@ -170,17 +149,12 @@ fun AuthScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Sign In", fontWeight = FontWeight.Bold) }
+                    text = { Text("Saved Profiles", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Register", fontWeight = FontWeight.Bold) }
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    text = { Text("Profiles", fontWeight = FontWeight.Bold) }
+                    text = { Text("+ New Profile", fontWeight = FontWeight.Bold) }
                 )
             }
 
@@ -224,87 +198,143 @@ fun AuthScreen(
             // Tab Content
             when (selectedTab) {
                 0 -> {
-                    // Sign In Tab
+                    // Profiles Tab
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Text(
-                            text = "Access Your Profile & History",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                color = CreamWhite,
-                                fontWeight = FontWeight.SemiBold
+                        if (currentUser != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(ObsidianCardElevated)
+                                    .border(1.5.dp, ChampagneGold, RoundedCornerShape(16.dp))
+                                    .padding(18.dp)
+                            ) {
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(54.dp)
+                                                .clip(CircleShape)
+                                                .background(parseColor(currentUser.avatarColorHex)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(currentUser.avatarEmoji, fontSize = 28.sp)
+                                        }
+                                        Column {
+                                            Text(
+                                                text = currentUser.displayName,
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontFamily = FontFamily.Serif,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = LightGold
+                                                )
+                                            )
+                                            Text(
+                                                text = "@${currentUser.username}",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = SoftCharcoal)
+                                            )
+                                            Text(
+                                                text = "Safe Word: ${currentUser.safeWord}",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = ChampagneGold,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // Lifetime Stats Grid
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceAround
+                                    ) {
+                                        StatColumn("Games", "${currentUser.gamesPlayed}")
+                                        StatColumn("Dares Done", "${currentUser.daresCompleted}")
+                                        StatColumn("Total Score", "${currentUser.totalPoints} pts")
+                                    }
+                                }
+                            }
+
+                            SeductiveSecondaryButton(
+                                text = "LOGOUT / SWITCH TO GUEST",
+                                onClick = onLogout,
+                                testTag = "logout_btn"
                             )
-                        )
-
-                        OutlinedTextField(
-                            value = loginUsername,
-                            onValueChange = { loginUsername = it },
-                            label = { Text("Username") },
-                            singleLine = true,
-                            colors = customTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("login_username_input")
-                        )
-
-                        OutlinedTextField(
-                            value = loginPin,
-                            onValueChange = { loginPin = it },
-                            label = { Text("PIN or Passcode") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            colors = customTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("login_pin_input")
-                        )
-
-                        SeductivePrimaryButton(
-                            text = "SIGN IN",
-                            onClick = { onLogin(loginUsername, loginPin) },
-                            enabled = loginUsername.isNotBlank() && loginPin.isNotBlank(),
-                            testTag = "login_submit_btn"
-                        )
+                        } else {
+                            Text(
+                                text = "No active profile selected. You are currently playing as Guest.",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = SoftCharcoal)
+                            )
+                        }
 
                         if (allUsers.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Or quick-select saved account:",
-                                style = MaterialTheme.typography.labelSmall.copy(color = SoftCharcoal)
+                                text = "Tap a profile to switch active host:",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = ChampagneGold,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                             allUsers.forEach { user ->
+                                val isCurrent = currentUser?.id == user.id
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(ObsidianCard)
-                                        .border(1.dp, ObsidianBorder, RoundedCornerShape(12.dp))
+                                        .background(if (isCurrent) ObsidianCardElevated else ObsidianCard)
+                                        .border(
+                                            1.dp,
+                                            if (isCurrent) ChampagneGold else ObsidianBorder,
+                                            RoundedCornerShape(12.dp)
+                                        )
                                         .clickable { onSelectUser(user) }
                                         .padding(12.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .background(parseColor(user.avatarColorHex)),
-                                            contentAlignment = Alignment.Center
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
-                                            Text(user.avatarEmoji, fontSize = 16.sp)
-                                        }
-                                        Column {
-                                            Text(
-                                                text = user.displayName,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = CreamWhite
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .background(parseColor(user.avatarColorHex)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(user.avatarEmoji, fontSize = 16.sp)
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = user.displayName,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = CreamWhite
+                                                    )
                                                 )
-                                            )
+                                                Text(
+                                                    text = "@${user.username} • ${user.gamesPlayed} games • ${user.totalPoints} pts",
+                                                    style = MaterialTheme.typography.labelSmall.copy(color = SoftCharcoal)
+                                                )
+                                            }
+                                        }
+
+                                        if (isCurrent) {
                                             Text(
-                                                text = "@${user.username} • Safe: ${user.safeWord}",
-                                                style = MaterialTheme.typography.labelSmall.copy(color = SoftCharcoal)
+                                                text = "ACTIVE",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = ChampagneGold
+                                                )
                                             )
                                         }
                                     }
@@ -315,7 +345,7 @@ fun AuthScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         SeductiveSecondaryButton(
-                            text = "CONTINUE AS GUEST",
+                            text = "PLAY AS GUEST HOST",
                             onClick = onContinueAsGuest,
                             testTag = "guest_login_btn"
                         )
@@ -326,7 +356,7 @@ fun AuthScreen(
                     // Register Tab
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Create Intimate User Account",
+                            text = "Create Profile",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 color = CreamWhite,
                                 fontWeight = FontWeight.SemiBold
@@ -353,19 +383,6 @@ fun AuthScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("reg_username_input")
-                        )
-
-                        OutlinedTextField(
-                            value = regPin,
-                            onValueChange = { regPin = it },
-                            label = { Text("PIN / Passcode") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            colors = customTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("reg_pin_input")
                         )
 
                         OutlinedTextField(
@@ -452,165 +469,17 @@ fun AuthScreen(
                             onClick = {
                                 onRegister(
                                     regUsername,
-                                    regPin,
                                     regDisplayName,
                                     regAvatarEmoji,
                                     regAvatarColorHex,
                                     regSafeWord,
                                     regIntensity
                                 )
-                                selectedTab = 2
+                                selectedTab = 0
                             },
-                            enabled = regUsername.isNotBlank() && regPin.isNotBlank() && regDisplayName.isNotBlank(),
+                            enabled = regUsername.isNotBlank() && regDisplayName.isNotBlank(),
                             testTag = "reg_submit_btn"
                         )
-                    }
-                }
-
-                2 -> {
-                    // Profiles Tab
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (currentUser != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(ObsidianCardElevated)
-                                    .border(1.5.dp, ChampagneGold, RoundedCornerShape(16.dp))
-                                    .padding(18.dp)
-                            ) {
-                                Column {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(54.dp)
-                                                .clip(CircleShape)
-                                                .background(parseColor(currentUser.avatarColorHex)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(currentUser.avatarEmoji, fontSize = 28.sp)
-                                        }
-                                        Column {
-                                            Text(
-                                                text = currentUser.displayName,
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    fontFamily = FontFamily.Serif,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = LightGold
-                                                )
-                                            )
-                                            Text(
-                                                text = "@${currentUser.username}",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = SoftCharcoal)
-                                            )
-                                            Text(
-                                                text = "Safe Word: ${currentUser.safeWord}",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = ChampagneGold,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    // Lifetime Stats Grid
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceAround
-                                    ) {
-                                        StatColumn("Games", "${currentUser.gamesPlayed}")
-                                        StatColumn("Dares Done", "${currentUser.daresCompleted}")
-                                        StatColumn("Total Score", "${currentUser.totalPoints} pts")
-                                    }
-                                }
-                            }
-
-                            SeductiveSecondaryButton(
-                                text = "LOGOUT / SWITCH",
-                                onClick = onLogout,
-                                testTag = "logout_btn"
-                            )
-                        } else {
-                            Text(
-                                text = "No active user logged in. You are currently in Guest mode.",
-                                style = MaterialTheme.typography.bodyMedium.copy(color = SoftCharcoal)
-                            )
-                        }
-
-                        if (allUsers.isNotEmpty()) {
-                            Text(
-                                text = "All Saved Accounts on this Device (${allUsers.size}):",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = ChampagneGold,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            allUsers.forEach { user ->
-                                val isCurrent = currentUser?.id == user.id
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isCurrent) ObsidianCardElevated else ObsidianCard)
-                                        .border(
-                                            1.dp,
-                                            if (isCurrent) ChampagneGold else ObsidianBorder,
-                                            RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { onSelectUser(user) }
-                                        .padding(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(CircleShape)
-                                                    .background(parseColor(user.avatarColorHex)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(user.avatarEmoji, fontSize = 16.sp)
-                                            }
-                                            Column {
-                                                Text(
-                                                    text = user.displayName,
-                                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = CreamWhite
-                                                    )
-                                                )
-                                                Text(
-                                                    text = "${user.gamesPlayed} games • ${user.totalPoints} pts",
-                                                    style = MaterialTheme.typography.labelSmall.copy(color = SoftCharcoal)
-                                                )
-                                            }
-                                        }
-
-                                        if (isCurrent) {
-                                            Text(
-                                                text = "ACTIVE",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = ChampagneGold
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }

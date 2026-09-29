@@ -41,34 +41,8 @@ class AuthViewModel(private val repository: DareRepository) : ViewModel() {
         }
     }
 
-    fun login(username: String, pin: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isAuthenticating = true, errorMessage = null)
-            val user = repository.getUserByUsername(username.trim().lowercase())
-            if (user == null) {
-                _uiState.value = _uiState.value.copy(
-                    isAuthenticating = false,
-                    errorMessage = "Account not found with username '$username'"
-                )
-            } else if (user.pinHash != pin.trim()) {
-                _uiState.value = _uiState.value.copy(
-                    isAuthenticating = false,
-                    errorMessage = "Incorrect PIN or passcode."
-                )
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    currentUser = user,
-                    isGuest = false,
-                    isAuthenticating = false,
-                    successMessage = "Welcome back, ${user.displayName}!"
-                )
-            }
-        }
-    }
-
     fun register(
         username: String,
-        pin: String,
         displayName: String,
         avatarEmoji: String,
         avatarColorHex: String,
@@ -76,14 +50,13 @@ class AuthViewModel(private val repository: DareRepository) : ViewModel() {
         intensity: Int
     ) {
         viewModelScope.launch {
-            if (username.isBlank() || pin.isBlank() || displayName.isBlank()) {
+            if (username.isBlank() || displayName.isBlank()) {
                 _uiState.value = _uiState.value.copy(errorMessage = "Please fill in all required fields.")
                 return@launch
             }
             _uiState.value = _uiState.value.copy(isAuthenticating = true, errorMessage = null)
             val newUser = UserEntity(
                 username = username.trim().lowercase(),
-                pinHash = pin.trim(),
                 displayName = displayName.trim(),
                 avatarEmoji = avatarEmoji.ifBlank { "💋" },
                 avatarColorHex = avatarColorHex,
@@ -121,7 +94,6 @@ class AuthViewModel(private val repository: DareRepository) : ViewModel() {
             currentUser = UserEntity(
                 id = -1,
                 username = "guest",
-                pinHash = "",
                 displayName = guestName,
                 avatarEmoji = "✨",
                 avatarColorHex = "#C92A45",
@@ -148,13 +120,8 @@ class AuthViewModel(private val repository: DareRepository) : ViewModel() {
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val db = AppDatabase.getInstance(context)
-            val repo = DareRepository(
-                db.userDao(),
-                db.gameSessionDao(),
-                db.dareCardDao(),
-                db.dareLogDao()
-            )
+            val db = AppDatabase.getInstance(context.applicationContext)
+            val repo = DareRepository(db)
             return AuthViewModel(repo) as T
         }
     }
